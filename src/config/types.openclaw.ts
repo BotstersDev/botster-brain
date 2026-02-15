@@ -97,6 +97,13 @@ export type OpenClawConfig = {
   talk?: TalkConfig;
   gateway?: GatewayConfig;
   memory?: MemoryConfig;
+  seks?: {
+    broker?: {
+      url?: string;
+      token?: string;
+      tokenCommand?: string;
+    };
+  };
 };
 
 export type ConfigValidationIssue = {
