@@ -601,6 +601,10 @@ async function runWebSearch(params: {
     throw new Error("Unsupported web search provider.");
   }
 
+  // ─── Spine proxy: route through broker if configured ─────────────────────
+  const spineUrl = process.env.SEKS_BROKER_URL?.replace(/\/$/, "");
+  const spineToken = process.env.SEKS_BROKER_TOKEN;
+
   const url = new URL(BRAVE_SEARCH_ENDPOINT);
   url.searchParams.set("q", params.query);
   url.searchParams.set("count", String(params.count));
@@ -617,21 +621,56 @@ async function runWebSearch(params: {
     url.searchParams.set("freshness", params.freshness);
   }
 
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      "X-Subscription-Token": params.apiKey,
-    },
-    signal: withTimeout(undefined, params.timeoutSeconds * 1000),
-  });
+  let data: BraveSearchResponse;
 
-  if (!res.ok) {
-    const detail = await readResponseText(res);
-    throw new Error(`Brave Search API error (${res.status}): ${detail || res.statusText}`);
+  if (spineUrl && spineToken) {
+    // Route through spine's tiered web search — brain never sees any Brave API key.
+    // Broker tries free token first, falls back to paid on 429.
+    const proxyRes = await fetch(`${spineUrl}/v1/web/search`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${spineToken}`,
+      },
+      body: JSON.stringify({
+        query: params.query,
+        count: params.count,
+        country: params.country,
+        search_lang: params.search_lang,
+        ui_lang: params.ui_lang,
+        freshness: params.freshness,
+      }),
+      signal: withTimeout(undefined, params.timeoutSeconds * 1000),
+    });
+
+    if (!proxyRes.ok) {
+      const detail = await readResponseText(proxyRes);
+      throw new Error(`Spine web search error (${proxyRes.status}): ${detail || proxyRes.statusText}`);
+    }
+
+    const proxyData = (await proxyRes.json()) as { ok: boolean; tier?: string; body?: unknown; error?: string };
+    if (!proxyData.ok) {
+      throw new Error(`Spine web search failed: ${proxyData.error ?? "unknown error"}`);
+    }
+    data = proxyData.body as BraveSearchResponse;
+  } else {
+    // Direct call — brain has the API key
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "X-Subscription-Token": params.apiKey,
+      },
+      signal: withTimeout(undefined, params.timeoutSeconds * 1000),
+    });
+
+    if (!res.ok) {
+      const detail = await readResponseText(res);
+      throw new Error(`Brave Search API error (${res.status}): ${detail || res.statusText}`);
+    }
+
+    data = (await res.json()) as BraveSearchResponse;
   }
-
-  const data = (await res.json()) as BraveSearchResponse;
   const results = Array.isArray(data.web?.results) ? (data.web?.results ?? []) : [];
   const mapped = results.map((entry) => {
     const description = entry.description ?? "";
