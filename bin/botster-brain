@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+# botster-brain — thin wrapper around the OpenClaw gateway
+# Part of the Brain-Spine-Actuator architecture
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LIB_DIR="$(cd "$SCRIPT_DIR/../" && pwd)"
+
+export OPENCLAW_HOME="${BOTSTER_BRAIN_HOME:-$HOME/.botster-brain}"
+
+case "${1:-help}" in
+  init)
+    shift
+    echo "🧠 botster-brain init"
+    echo ""
+
+    # Parse flags for non-interactive mode
+    SPINE_URL="" DISCORD_TOKEN="" MODEL="" NONINTERACTIVE=false
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --spine) SPINE_URL="$2"; shift 2 ;;
+        --discord) DISCORD_TOKEN="$2"; shift 2 ;;
+        --model) MODEL="$2"; shift 2 ;;
+        --non-interactive) NONINTERACTIVE=true; shift ;;
+        *) echo "Unknown flag: $1"; exit 1 ;;
+      esac
+    done
+
+    # Check for existing config
+    if [[ -f "$OPENCLAW_HOME/openclaw.json" ]]; then
+      if [[ "$NONINTERACTIVE" == "true" ]]; then
+        echo "⚠️  Config exists at $OPENCLAW_HOME/openclaw.json — overwriting (non-interactive mode)"
+      else
+        read -p "⚠️  Config exists at $OPENCLAW_HOME/openclaw.json. Overwrite? [y/N] " -n 1 -r
+        echo
+        [[ $REPLY =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
+      fi
+    fi
+
+    # Interactive prompts (skip if flags provided)
+    if [[ -z "$SPINE_URL" && "$NONINTERACTIVE" == "false" ]]; then
+      read -p "Spine URL (e.g. https://broker-internal.seksbot.com): " SPINE_URL
+    fi
+    if [[ -z "$DISCORD_TOKEN" && "$NONINTERACTIVE" == "false" ]]; then
+      read -p "Discord bot token: " DISCORD_TOKEN
+    fi
+    if [[ -z "$MODEL" && "$NONINTERACTIVE" == "false" ]]; then
+      read -p "Default model [anthropic/claude-sonnet-4-20250514]: " MODEL
+    fi
+    MODEL="${MODEL:-anthropic/claude-sonnet-4-20250514}"
+
+    # Create directories
+    mkdir -p "$OPENCLAW_HOME/workspace"
+
+    # Validate
+    if [[ -z "$DISCORD_TOKEN" ]]; then
+      echo "❌ Discord token is required."
+      exit 1
+    fi
+
+    # Generate config
+    cat > "$OPENCLAW_HOME/openclaw.json" <<CONF
+{
+  "meta": {
+    "generator": "botster-brain-init",
+    "generatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "$MODEL"
+      },
+      "workspace": "$OPENCLAW_HOME/workspace",
+      "compaction": { "mode": "safeguard" },
+      "heartbeat": { "every": "30m", "target": "last" },
+      "maxConcurrent": 4
+    }
+  },
+  "tools": {
+    "allow": [
+      "message",
+      "web_search",
+      "web_fetch",
+      "memory_search",
+      "memory_get",
+      "sessions_list",
+      "sessions_history",
+      "sessions_send",
+      "sessions_spawn",
+      "session_status",
+      "cron",
+      "tts",
+      "agents_list",
+      "image",
+      "gateway"
+    ],
+    "web": {
+      "search": { "enabled": true },
+      "fetch": { "enabled": true }
+    }
+  },
+  "channels": {
+    "discord": {
+      "enabled": true,
+      "token": "$DISCORD_TOKEN",
+      "groupPolicy": "open",
+      "dm": { "policy": "pairing" },
+      "guilds": { "*": { "requireMention": true } }
+    }
+  },
+  "gateway": {
+    "port": 18787,
+    "mode": "local",
+    "bind": "loopback"
+  },
+  "plugins": {
+    "entries": {
+      "discord": { "enabled": true }
+    }
+  }
+}
+CONF
+
+    echo ""
+    echo "✅ Config written to $OPENCLAW_HOME/openclaw.json"
+    echo "✅ Workspace at $OPENCLAW_HOME/workspace/"
+    if [[ -n "$SPINE_URL" ]]; then
+      echo "📡 Spine URL: $SPINE_URL (stored for future use)"
+      echo "$SPINE_URL" > "$OPENCLAW_HOME/.spine-url"
+    fi
+    echo ""
+    echo "Next: botster-brain start"
+    ;;
+
+  start)
+    shift || true
+    exec node "$LIB_DIR/openclaw.mjs" gateway start "$@"
+    ;;
+
+  stop)
+    shift || true
+    exec node "$LIB_DIR/openclaw.mjs" gateway stop "$@"
+    ;;
+
+  status)
+    shift || true
+    exec node "$LIB_DIR/openclaw.mjs" gateway status "$@"
+    ;;
+
+  restart)
+    shift || true
+    exec node "$LIB_DIR/openclaw.mjs" gateway restart "$@"
+    ;;
+
+  version|--version|-v)
+    node "$LIB_DIR/openclaw.mjs" --version 2>/dev/null || echo "botster-brain (version unknown)"
+    ;;
+
+  help|--help|-h)
+    cat <<EOF
+🧠 botster-brain — AI agent gateway (Brain-Spine-Actuator architecture)
+
+Usage:
+  botster-brain init      Interactive setup (spine URL, Discord token, model)
+  botster-brain start     Start the gateway
+  botster-brain stop      Stop the gateway
+  botster-brain restart   Restart the gateway
+  botster-brain status    Show gateway status
+  botster-brain version   Show version
+
+Environment:
+  BOTSTER_BRAIN_HOME    Config/state directory (default: ~/.botster-brain)
+  BOTSTER_SPINE_URL     Spine broker URL
+
+Home: $OPENCLAW_HOME
+EOF
+    ;;
+
+  *)
+    echo "Unknown command: $1 (try: botster-brain help)"
+    exit 1
+    ;;
+esac

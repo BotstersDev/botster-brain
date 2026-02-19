@@ -1,5 +1,5 @@
 {
-  "name": "openclaw",
+  "name": "botster-brain",
   "version": "2026.2.18",
   "description": "Multi-channel AI gateway with extensible messaging integrations",
   "keywords": [],
@@ -14,7 +14,7 @@
     "url": "git+https://github.com/openclaw/openclaw.git"
   },
   "bin": {
-    "openclaw": "openclaw.mjs"
+    "botster-brain": "bin/botster-brain"
   },
   "directories": {
     "doc": "docs",
