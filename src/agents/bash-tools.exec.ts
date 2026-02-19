@@ -849,6 +849,80 @@ export function createExecTool(
         throw new Error("Provide a command to start.");
       }
 
+      // ─── Spine routing: route exec through broker → actuator ─────────────
+      const spineUrl = process.env.SEKS_BROKER_URL?.replace(/\/$/, "");
+      const spineToken = process.env.SEKS_BROKER_TOKEN;
+      const spineExec = process.env.BOTSTER_EXEC_VIA_SPINE === "1";
+
+      if (spineExec && spineUrl && spineToken) {
+        // Route through spine — command goes to broker, broker delivers to actuator
+        const timeoutMs = (typeof params.timeout === "number" ? params.timeout : defaultTimeoutSec) * 1000;
+        
+        const response = await fetch(`${spineUrl}/v1/command`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${spineToken}`,
+          },
+          body: JSON.stringify({
+            capability: "exec",
+            payload: {
+              command: params.command,
+              cwd: params.workdir?.trim() || defaults?.cwd || process.cwd(),
+              timeout: typeof params.timeout === "number" ? params.timeout : defaultTimeoutSec,
+              env: params.env,
+              pty: params.pty,
+              background: params.background,
+              yieldMs: params.yieldMs,
+            },
+            timeout_ms: timeoutMs + 5000, // give actuator time + buffer
+          }),
+          signal: AbortSignal.timeout(timeoutMs + 10000),
+        });
+
+        if (!response.ok) {
+          const detail = await response.text().catch(() => "");
+          throw new Error(`Spine exec error (${response.status}): ${detail || response.statusText}`);
+        }
+
+        const data = await response.json() as {
+          ok: boolean;
+          status?: string;
+          result?: {
+            stdout?: string;
+            stderr?: string;
+            exitCode?: number;
+            durationMs?: number;
+            error?: string;
+            sessionId?: string;
+          };
+          error?: string;
+        };
+
+        if (!data.ok) {
+          throw new Error(`Spine exec failed: ${data.error ?? "unknown error"}`);
+        }
+
+        const result = data.result ?? {};
+        const output = [result.stdout, result.stderr, result.error].filter(Boolean).join("\n");
+        const isSuccess = data.status === "completed" && (result.exitCode === 0 || result.exitCode === undefined);
+
+        if (!isSuccess) {
+          throw new Error(output || `Command failed (exit ${result.exitCode})`);
+        }
+
+        return {
+          content: [{ type: "text" as const, text: output || "(no output)" }],
+          details: {
+            status: "completed" as const,
+            exitCode: result.exitCode ?? 0,
+            durationMs: result.durationMs ?? 0,
+            aggregated: output,
+            cwd: params.workdir?.trim() || defaults?.cwd || process.cwd(),
+          },
+        };
+      }
+
       const maxOutput = DEFAULT_MAX_OUTPUT;
       const pendingMaxOutput = DEFAULT_PENDING_MAX_OUTPUT;
       const warnings: string[] = [];
