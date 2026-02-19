@@ -84,23 +84,6 @@ case "${1:-help}" in
     }
   },
   "tools": {
-    "allow": [
-      "message",
-      "web_search",
-      "web_fetch",
-      "memory_search",
-      "memory_get",
-      "sessions_list",
-      "sessions_history",
-      "sessions_send",
-      "sessions_spawn",
-      "session_status",
-      "cron",
-      "tts",
-      "agents_list",
-      "image",
-      "gateway"
-    ],
     "web": {
       "search": { "enabled": true },
       "fetch": { "enabled": true }
