@@ -174,18 +174,18 @@ export async function resolveApiKeyForProvider(params: {
   const { provider, cfg, profileId, preferredProfile } = params;
   const store = params.store ?? ensureAuthProfileStore(params.agentDir);
 
-  // Check if SEKS broker is configured
+  // Check if Botster broker is configured
   const brokerClient = createBrokerClientIfConfigured(cfg);
   if (brokerClient) {
     try {
       const brokerToken = await brokerClient.resolveToken();
       return {
         apiKey: brokerToken,
-        source: "seks-broker",
+        source: "botster-broker",
         mode: "broker",
       };
     } catch (error) {
-      console.warn(`SEKS broker auth failed: ${error}`);
+      console.warn(`[botster-auth] Broker auth failed: ${error}`);
     }
   }
 
@@ -197,7 +197,7 @@ export async function resolveApiKeyForProvider(params: {
       agentDir: params.agentDir,
     });
     if (!resolved) {
-      throw new Error(`No credentials found for profile "${profileId}".`);
+      throw new Error(`[botster-auth] No credentials found for profile "${profileId}".`);
     }
     const mode = store.profiles[profileId]?.type;
     return {
@@ -262,7 +262,7 @@ export async function resolveApiKeyForProvider(params: {
     const hasCodex = listProfilesForProvider(store, "openai-codex").length > 0;
     if (hasCodex) {
       throw new Error(
-        'No API key found for provider "openai". You are authenticated with OpenAI Codex OAuth. Use openai-codex/gpt-5.3-codex (OAuth) or set OPENAI_API_KEY to use openai/gpt-5.1-codex.',
+        '[botster-auth] No API key found for provider "openai". You are authenticated with OpenAI Codex OAuth. Use openai-codex/gpt-5.3-codex (OAuth) or set OPENAI_API_KEY to use openai/gpt-5.1-codex.',
       );
     }
   }
@@ -271,7 +271,7 @@ export async function resolveApiKeyForProvider(params: {
   const resolvedAgentDir = path.dirname(authStorePath);
   throw new Error(
     [
-      `No API key found for provider "${provider}".`,
+      `[botster-auth] No API key found for provider "${provider}".`,
       `Auth store: ${authStorePath} (agentDir: ${resolvedAgentDir}).`,
       `Configure auth for this agent (${formatCliCommand("openclaw agents add <id>")}) or copy auth-profiles.json from the main agentDir.`,
     ].join(" "),
@@ -453,5 +453,5 @@ export function requireApiKey(auth: ResolvedProviderAuth, provider: string): str
   if (key) {
     return key;
   }
-  throw new Error(`No API key resolved for provider "${provider}" (auth mode: ${auth.mode}).`);
+  throw new Error(`[botster-auth] No API key resolved for provider "${provider}" (auth mode: ${auth.mode}).`);
 }
