@@ -1,36 +1,39 @@
 {
   "name": "openclaw",
-  "version": "2026.2.18",
-  "description": "Multi-channel AI gateway with extensible messaging integrations",
-  "keywords": [],
-  "homepage": "https://github.com/openclaw/openclaw#readme",
+  "version": "0.1.0-alpha.1",
+  "description": "AI agent gateway — the Brain in Brain-Spine-Actuator architecture",
+  "keywords": [
+    "agent",
+    "ai",
+    "brain-spine-actuator",
+    "gateway",
+    "llm"
+  ],
+  "homepage": "https://github.com/BotstersDev/botster-brain",
   "bugs": {
-    "url": "https://github.com/openclaw/openclaw/issues"
+    "url": "https://github.com/BotstersDev/botster-brain/issues"
   },
   "license": "MIT",
   "author": "",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/openclaw/openclaw.git"
+    "url": "git+https://github.com/BotstersDev/botster-brain.git"
   },
   "bin": {
-    "openclaw": "openclaw.mjs"
+    "botster-brain": "bin/botster-brain"
   },
   "directories": {
     "doc": "docs",
     "test": "test"
   },
   "files": [
-    "CHANGELOG.md",
-    "LICENSE",
+    "bin/",
     "openclaw.mjs",
-    "README-header.png",
-    "README.md",
-    "assets/",
     "dist/",
-    "docs/",
-    "extensions/",
-    "skills/"
+    "extensions/zulip/",
+    "assets/",
+    "LICENSE",
+    "README.md"
   ],
   "type": "module",
   "main": "dist/index.js",
@@ -88,8 +91,6 @@
     "openclaw": "node scripts/run-node.mjs",
     "openclaw:rpc": "node scripts/run-node.mjs agent --mode rpc --json",
     "plugins:sync": "node --import tsx scripts/sync-plugin-versions.ts",
-    "prepack": "pnpm build && pnpm ui:build",
-    "prepare": "command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath git-hooks || exit 0",
     "protocol:check": "pnpm protocol:gen && pnpm protocol:gen:swift && git diff --exit-code -- dist/protocol.schema.json apps/macos/Sources/OpenClawProtocol/GatewayModels.swift",
     "protocol:gen": "node --import tsx scripts/protocol-gen.ts",
     "protocol:gen:swift": "node --import tsx scripts/protocol-gen-swift.ts",
